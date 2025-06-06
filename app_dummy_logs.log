@@ -13,3 +13,8 @@
 2025-06-04 08:45:15,201 INFO  AppServer1 auto-scaling triggered: +1 instance
 2025-06-04 08:50:05,744 INFO  AppServer3 started successfully on port 8082
 2025-06-04 08:55:20,990 INFO  AppServer3 health check passed
+2025-06-06 08:00:01,100 INFO  AppServer1 started successfully on port 8080
+2025-06-06 08:05:12,342 WARN  AppServer1 high memory usage detected (85%)
+2025-06-06 08:10:33,876 ERROR AppServer1 database connection failed: timeout
+2025-06-06 08:15:45,123 INFO  AppServer1 retrying database connection...
+2025-06-06 08:16:01,432 INFO  AppServer1 database connection re-established

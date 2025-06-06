@@ -21,7 +21,11 @@ functions = [
         "parameters": {
             "type": "object",
             "properties": {
-                "application_name": {"type": "string"}
+                "application_name": {"type": "string"},
+                "time_range": {
+                    "type": "string",
+                    "description": "A time range like 'last 24 hours', 'past 7 days', 'today', etc."
+                    }
             },
             "required": ["application_name"]
         }
@@ -32,12 +36,37 @@ functions = [
         "parameters": {
             "type": "object",
             "properties": {
-                "application_name": {"type": "string"}
+                "application_name": {"type": "string"},
+                "time_range": {
+                    "type": "string",
+                    "description": "A time range like 'last 24 hours', 'past 7 days', 'today', etc."
+                }
             },
             "required": ["application_name"]
         }
     }
 ]
+
+def parse_time_range(time_range: str) -> tuple[str, str]:
+    time_range = (time_range or "").lower().strip()
+
+    if "last 24 hours" in time_range or "past 24 hours" in time_range:
+        return "-24h", "now"
+    elif "last 7 days" in time_range or "past 7 days" in time_range or "past week" in time_range:
+        return "-7d", "now"
+    elif "last hour" in time_range or "past hour" in time_range:
+        return "-1h", "now"
+    elif "today" in time_range:
+        return "@d", "now"
+    elif "yesterday" in time_range:
+        return "@d-1d", "@d"
+    elif "last 30 minutes" in time_range or "past 30 minutes" in time_range:
+        return "-30m", "now"
+    elif "last 15 minutes" in time_range or "past 15 minutes" in time_range:
+        return "-15m", "now"
+    else:
+        # Default fallback
+        return "-1h", "now"
 
 def get_rephrased_query(conversation: list, user_input: str) -> str:
     system_prompt = {
@@ -61,12 +90,15 @@ def get_rephrased_query(conversation: list, user_input: str) -> str:
     return response.choices[0].message.content.strip()
 
 
-def generate_spl(function_name: str, app_name: str) -> str:
+def generate_spl(function_name: str, app_name: str, earliest_time: str = "-1h", latest_time: str = "now") -> str:
+    time_filter = f' earliest="{earliest_time}" latest="{latest_time}"'
+
     if function_name == "check_status":
-        return f'search index=main sourcetype=test1 app="{app_name}" status!=200'
+        return f'search index=main sourcetype=test1 app="{app_name}" status!=200{time_filter}'
     elif function_name == "search_errors":
-        return f'search source="app_dummy_logs.log" host="DESKTOP-517J9U9" sourcetype="test1" "ERROR {app_name}"'
+        return f'search source="app_dummy_logs.log" host="DESKTOP-517J9U9" sourcetype="test1" "ERROR {app_name}"{time_filter}'
     return "Unknown function"
+
 
 conversation = [
     {"role": "system", 
@@ -109,7 +141,10 @@ async def route_user_query(user_input: str) -> dict:
         function_name = tool.function.name
         args = json.loads(tool.function.arguments)
         app_name = args.get("application_name")
-        spl_query = generate_spl(function_name, app_name)
+        time_range = args.get("time_range", "")
+        earliest, latest = parse_time_range(time_range)
+        spl_query = generate_spl(function_name, app_name, earliest, latest)
+
 
         session_key = splunk_login()
         if not session_key:
