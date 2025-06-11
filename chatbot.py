@@ -4,6 +4,7 @@ from dotenv import load_dotenv
 import json
 import pprint
 from splunk_helper import splunk_login, splunk_submit_search, splunk_wait_for_job, splunk_get_results
+from github_helper import handle_llm_diagnostic, maybe_apply_fix_from_user
 
 
 load_dotenv()
@@ -113,7 +114,7 @@ def generate_spl(function_name: str, app_name: str, earliest_time: str = "-1h", 
     elif function_name == "search_errors":
         return f'search source="app_dummy_logs.log" host="DESKTOP-517J9U9" sourcetype="test1" "ERROR {app_name}"{time_filter}'
     elif function_name == "search_null_pointer_exceptions":
-        return f'search source="test_log.txt" host="DESKTOP-517J9U9" index="main" sourcetype="test3" {app_name} "NullPointerException" AND "at " {time_filter}'
+        return f'search source="test_log.txt" host="DESKTOP-517J9U9" sourcetype="test4" {app_name} "NullPointerException" AND "at " {time_filter}'
     return "Unknown function"
 
 
@@ -133,6 +134,10 @@ conversation = [
     You must be accurate, cautious, and inquisitive when needed."""}]
 
 async def route_user_query(user_input: str) -> dict:
+    if "github.com" in user_input:
+        pr_response = maybe_apply_fix_from_user(user_input)
+        if "✅" in pr_response:
+            return {"response": pr_response}
     # Step 1: Get reframed query from GPT
     clarified_input = get_rephrased_query(conversation, user_input)
 
@@ -177,10 +182,6 @@ async def route_user_query(user_input: str) -> dict:
         diagnostics = await get_diagnostic_suggestion(app_name, function_name, spl_query, results)
 
         return {
-            "function_called": function_name,
-            "application": app_name,
-            "spl_query": spl_query,
-            "splunk_results": results,
             "diagnostics": diagnostics
         }
 
@@ -205,7 +206,7 @@ def create_diagnostic_prompt(app_name, function_called, spl_query, splunk_result
     Your task:
     1. Identify the **likely cause** of the issue.
     2. Suggest a **precise fix or remediation**.
-    3. Provide the **file path** where the fix should be applied.
+    3. Provide the **file path** where the fix should be applied. Do not assume any folder structure; just provide what you see in the log.
 
     Also suggest whether this should be a hotfix or a normal PR.
     Only output:
@@ -213,6 +214,11 @@ def create_diagnostic_prompt(app_name, function_called, spl_query, splunk_result
     - Fix
     - File path for PR
     - PR type: hotfix or normal
+    Give output in JSON format like this:
+    "root_cause": "string",
+    "fix": "string",
+    "file_path": "string",
+    "pr_type": "hotfix" or "normal"
     """
 
 
@@ -232,4 +238,10 @@ async def get_diagnostic_suggestion(app_name, function_called, spl_query, splunk
         temperature=0.4
     )
 
-    return {"diagnostic_suggestion": response.choices[0].message.content.strip()}
+    diagnostic = response.choices[0].message.content.strip()
+    summary, parsed = handle_llm_diagnostic(diagnostic)
+    return {
+        "diagnostic_suggestion": summary,
+        "raw_diagnostic": diagnostic,
+        "parsed_fix": parsed
+    }
