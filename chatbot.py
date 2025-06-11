@@ -44,6 +44,21 @@ functions = [
             },
             "required": ["application_name"]
         }
+    },
+    {
+        "name": "search_null_pointer_exceptions",
+        "description": "Search for null pointer exceptions in a specific application's logs.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "application_name": {"type": "string"},
+                "time_range": {
+                    "type": "string",
+                    "description": "A time range like 'last 24 hours', 'past 7 days', 'today', etc."
+                }
+            },
+            "required": ["application_name"]
+        }
     }
 ]
 
@@ -97,6 +112,8 @@ def generate_spl(function_name: str, app_name: str, earliest_time: str = "-1h", 
         return f'search index=main sourcetype=test1 app="{app_name}" status!=200{time_filter}'
     elif function_name == "search_errors":
         return f'search source="app_dummy_logs.log" host="DESKTOP-517J9U9" sourcetype="test1" "ERROR {app_name}"{time_filter}'
+    elif function_name == "search_null_pointer_exceptions":
+        return f'search source="test_log.txt" host="DESKTOP-517J9U9" index="main" sourcetype="test3" {app_name} "NullPointerException" AND "at " {time_filter}'
     return "Unknown function"
 
 
@@ -188,7 +205,7 @@ def create_diagnostic_prompt(app_name, function_called, spl_query, splunk_result
     Your task:
     1. Identify the **likely cause** of the issue.
     2. Suggest a **precise fix or remediation**.
-    3. Based on a typical Python web backend (Flask or FastAPI style) project layout, tell the developer which **file and function** they should likely update. If the issue is in DB connection logic, it might be in `db.py` or `services/database.py`.
+    3. Provide the **file path** where the fix should be applied.
 
     Also suggest whether this should be a hotfix or a normal PR.
     Only output:
