@@ -13,7 +13,6 @@ public class TestApp {
 
     private static void simulateError() {
         String test = null;
-        // This will throw NullPointerException
         test.toString();
     }
 }

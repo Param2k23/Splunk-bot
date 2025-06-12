@@ -130,6 +130,7 @@ conversation = [
     - Never assume missing details like the application name.
     - Only call a function if you are confident the user intends to perform one of the defined tasks (e.g., check status, search for errors).
     - If the user's request does not align with any defined functions, or seems incomplete, ask for clarification.
+    - Do not give extra messages or explanations like ok now i am searching or going to call the function etc etc.
 
     You must be accurate, cautious, and inquisitive when needed."""}]
 
@@ -204,21 +205,22 @@ def create_diagnostic_prompt(app_name, function_called, spl_query, splunk_result
     ```
 
     Your task:
-    1. Identify the **likely cause** of the issue.
-    2. Suggest a **precise fix or remediation**.
-    3. Provide the **file path** where the fix should be applied. Do not assume any folder structure; just provide what you see in the log.
+    1. Identify the **likely root cause** of the issue.
+    2. Suggest a **precise code-level fix**. This fix should be in valid code format and replace the faulty line.
+    3. Specify the **exact file name** (from the log) where the fix should be applied.
+    4. Include the **line number** of the problematic line based on the stack trace.
+    5. Indicate whether this should be a `"hotfix"` or `"normal"` pull request.
 
-    Also suggest whether this should be a hotfix or a normal PR.
-    Only output:
-    - Root cause
-    - Fix
-    - File path for PR
-    - PR type: hotfix or normal
-    Give output in JSON format like this:
-    "root_cause": "string",
-    "fix": "string",
-    "file_path": "string",
-    "pr_type": "hotfix" or "normal"
+    ⚠️ Your output must be a single, valid JSON object inside a markdown ```json code block, and nothing else. Format it exactly like this:
+
+    ```json
+    {{
+    "root_cause": "Brief explanation here.",
+    "fix": "Provide the fix by rewriting the code of faulty line from the log exactly as it appears, using the same variable names.",
+    "file_path": "TestApp.java",
+    "pr_type": "hotfix",
+    "line_number": 17
+    }}
     """
 
 
@@ -239,6 +241,7 @@ async def get_diagnostic_suggestion(app_name, function_called, spl_query, splunk
     )
 
     diagnostic = response.choices[0].message.content.strip()
+    print("Diagnostic response:", diagnostic)
     summary, parsed = handle_llm_diagnostic(diagnostic)
     return {
         "diagnostic_suggestion": summary,
